@@ -1,7 +1,7 @@
 using Khepri
 backend(autocad)
 
-edificio_CREE(p, nl, nc, np, lg, cg, h) =
+edificio_CREE(p, nl, nc, np, lg, cg, h, nucleos) =
     let
         # nl: número de linhas da Grelha CREE
         # nc: número de colunas da Grelha CREE
@@ -16,20 +16,20 @@ edificio_CREE(p, nl, nc, np, lg, cg, h) =
         b = 0.3 # Comprimento dos pilares (pode ser ajustado conforme necessário)
         c = 0.3 # Largura dos pilares de canto (pode ser ajustada conforme necessário)
         e = 0.1 # Espessura da laje de betão (pode ser ajustada conforme necessário)
-        
+        nucleos_set = Set{Tuple{Int,Int}}((n[1], n[2]) for n in nucleos)
 
-        Laje_total_CREE(p, nl, nc, np, lg, cg, h, ev, lvb, e)
+        Laje_total_CREE(p, nl, nc, np, lg, cg, h, ev, lvb, e, nucleos_set)
         pilares_CREE(p, nl, nc, np, lg, cg, h, ev, a, b)
-        pilares_canto_CREE(p, nl, nc, np, lg, cg, h, ev, c, "single")
+        pilares_canto_CREE(p, nl, nc, np, lg, cg, h, ev, c, "triple", nucleos_set)
         viga_central(p, nl, nc, np, lg, cg, h, lvb)
     end
 
-Laje_total_CREE(p, nl, nc, np, lg, cg, h, ev, lvb, e) =
+Laje_total_CREE(p, nl, nc, np, lg, cg, h, ev, lvb, e, nucleos_set) =
     let
         evb = ev - e # Espessura da viga de bordadura ajustada para a espessura da laje
-        
+
         [viga_bordadura(p + vz(i * h - ev), nl, nc, lg, cg, lvb, evb) for i in 1:(np)]
-        [laje_CREE(p + vxyz(k * lg, j * cg, i * h - e), lg, cg, e) for i in 1:(np) for j in 0:(nc-1) for k in 0:(nl-1) ]
+        [laje_CREE(p + vxyz(k * lg - lg, j * cg - cg, i * h - e), lg, cg, e) for i in 1:(np) for j in 1:(nc) for k in 1:(nl) if !( (k, j) in nucleos_set )]
     end
 
 laje_CREE(p, lg, cg, e) =
@@ -54,7 +54,7 @@ pilares_CREE(p, nl, nc, np, lg, cg, h, e, a, b) =
         [pilar_glulam(p + vxyz(i * (nl * lg - b), j * cg, k * h), h, e, b, a, -b, -a) for k in 0:(np-1) for j in 1:(nc-1) for i in 0:1]
     end
 
-pilares_canto_CREE(p1, nl, nc, np, lg, cg, h, e, c, tipo) =
+pilares_canto_CREE(p1, nl, nc, np, lg, cg, h, ev, c, tipo, nucleos_set) =
     if tipo == "triple"
         let                                
                                                         # p1 = Ponto de referência para os pilares do canto inferior esquerdo
@@ -63,13 +63,13 @@ pilares_canto_CREE(p1, nl, nc, np, lg, cg, h, e, c, tipo) =
             p4 = p1 + vxy(lg * nl - 2c, cg * nc - 2c)   # Ponto de referência para os pilares do canto superior direito
 
             # Cria os pilares de canto
-            [pilar_glulam_canto(p1 + vz(k * h), pts_pilar(p1 + vz(k * h), c)[2], pts_pilar(p1 + vz(k * h), c)[3], h, e, c) for k in 0:(np-1)]
-            [pilar_glulam_canto(p2 + vz(k * h), pts_pilar(p2 + vz(k * h), c)[2], pts_pilar(p2 + vz(k * h), c)[4], h, e, c) for k in 0:(np-1)]
-            [pilar_glulam_canto(p3 + vz(k * h), pts_pilar(p3 + vz(k * h), c)[3], pts_pilar(p3 + vz(k * h), c)[4], h, e, c) for k in 0:(np-1)]
-            [pilar_glulam_canto(pts_pilar(p4 + vz(k * h), c)[4], pts_pilar(p4 + vz(k * h), c)[2], pts_pilar(p4 + vz(k * h), c)[3], h, e, c) for k in 0:(np-1)]
+            [pilar_glulam_canto(p1 + vz(k * h), pts_pilar(p1 + vz(k * h), c)[2], pts_pilar(p1 + vz(k * h), c)[3], h, ev, c) for k in 0:(np-1) if !( (1, 1) in nucleos_set )]
+            [pilar_glulam_canto(p2 + vz(k * h), pts_pilar(p2 + vz(k * h), c)[2], pts_pilar(p2 + vz(k * h), c)[4], h, ev, c) for k in 0:(np-1) if !( (nl, 1) in nucleos_set )]
+            [pilar_glulam_canto(p3 + vz(k * h), pts_pilar(p3 + vz(k * h), c)[3], pts_pilar(p3 + vz(k * h), c)[4], h, ev, c) for k in 0:(np-1) if !( (1, nc) in nucleos_set )]
+            [pilar_glulam_canto(pts_pilar(p4 + vz(k * h), c)[4], pts_pilar(p4 + vz(k * h), c)[2], pts_pilar(p4 + vz(k * h), c)[3], h, ev, c) for k in 0:(np-1) if !( (nl, nc) in nucleos_set )]
         end
     else
-        [box(p1 + vxyz(i * (nl * lg - c), j * (nc * cg - c), k * h), p1 + vxyz(i * (nl * lg - c) + c, j * (nc * cg - c) + c, k * h + h - e)) for k in 0:(np-1) for i in 0:1 for j in 0:1]
+        [box(p1 + vxyz(i * (nl * lg - c), j * (nc * cg - c), k * h), p1 + vxyz(i * (nl * lg - c) + c, j * (nc * cg - c) + c, k * h + h - ev)) for k in 0:(np-1) for i in 0:1 for j in 0:1 if !( ((i==0 ? 1 : nl), (j==0 ? 1 : nc)) in nucleos_set )]
     end
 
 pts_pilar(p, c) =
@@ -92,8 +92,8 @@ pilar_glulam(p, h, e, a, b, c, d) =
         # d: comprimento do pilar 2 em relação ao ponto de referência
 
         # Cria os pilares da peça CREE
-        [box(p, xyz(p.x + a, p.y + b, p.z + h - e)),
-        box(p, xyz(p.x - c, p.y + d, p.z + h - e))]
+        box(p, xyz(p.x + a, p.y + b, p.z + h - e))
+        box(p, xyz(p.x - c, p.y + d, p.z + h - e))
     end
 
 pilar_glulam_canto(p1, p2, p3, h, e, c) =
@@ -123,5 +123,7 @@ viga_central(p, nl, nc, np, lg, cg, h, lvb) =
     # Teste da função
 delete_all_shapes()
 
-edificio_CREE(xyz(0, 0, 0), 5, 3, 5, 3.0, 6.0, 3.0)
-edificio_CREE(xyz(30, 0, 0), 2, 10, 3, 6.0, 3.0, 3.0)
+edificio_CREE(xyz(0, 0, 0), 5, 3, 5, 3.0, 6.0, 3.0, [[1, 3], [5, 1], [5, 3], [4, 1]])
+
+
+edificio_CREE(xyz(30, 0, 0), 2, 10, 3, 6.0, 3.0, 3.0,[[1, 3], [2, 10]])
