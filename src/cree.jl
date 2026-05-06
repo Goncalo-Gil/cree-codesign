@@ -16,7 +16,9 @@ edificio_CREE(p, n_linhas, n_colunas, dim_linhas, dim_colunas, n_pisos, h) =
         hvi = 0.3 # Altura da viga interior
         bvi = 0.3 # Largura da viga interior
 
-        laje_total(p, dim_colunas, n_colunas, dim_linhas, n_linhas, n_pisos, h, e_laje)
+        vazios_set = [[1, 1], [2, 3], [3, 1], [4, 1], [6, 1]]
+
+        laje_total(p, dim_colunas, n_colunas, dim_linhas, n_linhas, n_pisos, h, e_laje, vazios_set)
         pilares_fachada_total(p, dim_colunas, n_colunas, dim_linhas, n_linhas, n_pisos, h, apf, bpf, cpf, hvb + e_laje)
         viga_bordadura_total(p, dim_colunas, n_colunas, dim_linhas, n_linhas, hvb, bvb, h, n_pisos, e_laje)
         viga_interior_total(p, dim_colunas, n_colunas, dim_linhas, n_linhas, h, n_pisos, hvi, bvi, e_laje, bpf)
@@ -35,22 +37,25 @@ grelha_CREE(p, l_tot, n, c_tot, m) =
 #Funções de lajes
 
 #Criação de lajes em todos os pisos
-laje_total(p, dc, nc, dl, nl, n_pisos, h, e_laje) =
-    [laje_piso(p + vz(h * i - e_laje/2), dc, nc, dl, nl, e_laje)
+laje_total(p, dc, nc, dl, nl, n_pisos, h, e_laje, vazios_set) =
+    [laje_piso(p + vz(h * i - e_laje/2), dc, nc, dl, nl, e_laje, vazios_set)
         for i in 1:n_pisos]
 
 #Função que entrega arrays de 4 pontos à função laje_map
-laje_piso(p, dc, nc, dl, nl, e_laje) =
-    [laje_map(
-            vcat(grelha_CREE(p, dc * nc, nc, dl * nl, nl)...), e_laje)]
+laje_piso(p, dc, nc, dl, nl, e_laje, vazios_set) =
+    [laje_for(
+            grelha_CREE(p, dc * nc, nc, dl * nl, nl), e_laje, nc, nl, vazios_set)]
 
-#Função que aplicaa a função laje_singular a cada array de 4 pontos
-laje_map(ptss, e_laje) =
-    map(i -> laje_singular(i, e_laje), ptss)
-    
+#Função que aplica a função laje_singular a cada array de 4 pontos          
+laje_for(ptss, e_laje, nc, nl, vazios_set) =
+    [laje_singular([vcat(ptss[i][j])...], e_laje, nc, nl, vazios_set)
+        for i in 1:nc, j in 1:nl
+            if !([i, j] in vazios_set)]
+
 #Função que cria uma laje untilizando um array de 4 pontos
-laje_singular(ptss, e_laje) =
-    thicken(surface_polygon(ptss), e_laje)
+laje_singular(pts, e_laje, nc, nl, vazios_set) =
+    [thicken(
+        surface_polygon(pts), e_laje)]
 
 
 #Funções de pilares da fachada
@@ -70,12 +75,13 @@ pilares_fachada_piso(p, dc, nc, dl, nl, h, a, b, c) =
 
 #Função que entrega um array de pontos à função pilares_map
 pilares_grelha(p, c, n, l, m, h, a, b, x, y) =
-    pilares_map(
-        vcat(pts_grelha(p + vxy(x, y), c, n, l, m)...), a, b, h)
+    pilares_for(
+        pts_grelha(p + vxy(x, y), c, n, l, m), a, b, h)
 
 #Função que aplica a função pilar_singular a cada ponto do array        
-pilares_map(pts, a, b, h) =
-    map(i -> pilar_singular(i, h, a, b), pts)
+pilares_for(ptss, a, b, h) =
+    [pilar_singular(ptss[i][j], h, a, b)
+        for i in 1:length(ptss), j in 1:length(ptss[1])]
 
 #Função que cria um pilar
 pilar_singular(p, h, a, b) =
@@ -134,12 +140,15 @@ viga_interior_singular(ptss, hvi, xvi, yvi, offset) =
 
 #Testes de funções
 delete_all_shapes()
-edificio_CREE(xyz(0, 0, 0), 5, 7, 6.0, 3.0, 3, 3.0)
+edificio_CREE(xyz(0, 0, 0), 4, 7, 6.0, 3.0, 3, 3.0)
 
 grelha = pts_grelha(xyz(0, 0, 0), 18.0, 3, 21.0, 7)
 grelha_CREE(xyz(0, 0, 0), 18.0, 3, 21.0, 7)
-vcat(grelha_CREE(xyz(0, 0, 0), 18.0, 3, 21.0, 7))
+vcat(grelha_CREE(xyz(0, 0, 0), 18.0, 3, 21.0, 7)...)
 
 viga_interior_grelha(xyz(0, 0, 0), 18.0, 7, 21.0, 3, 3.0, 3.0, 3.0, 0.0)
 
 grelha[2][1]
+
+vazios_set = [[1, 1], [2, 3]]
+vazios_set[1]
