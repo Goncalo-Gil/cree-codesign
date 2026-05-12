@@ -30,7 +30,7 @@ edificio_CREE(p, nl, nc, dl, dc, np, h, vazios_set, nucleos_set) =
         pilares_interior_total(p, dc, nc, dl, nl, np, h, hvi + e_laje, api, vz_set_tot)
         viga_bordadura_total(p, dc, nc, dl, nl, hvb, bvb, h, np, e_laje, vz_set, ncl_set)
         viga_interior_total(p, dc, nc, dl, nl, h, np, hvi, bvi, e_laje, bvb, vz_set_tot, vz_set)
-        nucleo_total(p, dc, nc, dl, nl, h, np, enb, nucleos_set_count(ncl_set))
+        nucleo_total(p, dc, nc, dl, nl, h, enb, nucleos_set_count(ncl_set, np))
         painel_fachada_total(p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, e_fachada)
     end
 
@@ -709,8 +709,8 @@ viga_interior_piso(p, dc, nc, dl, nl, hvi, bvi, e, bvb, vz_set_tot, vz_set, k) =
 #Função que seleciona os pontos para criar as vigas interiores
 viga_interior_for(ptss, hvi, xvi, yvi, offset, vz_set_tot, vz_set, k) =
     let
-        in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
-        in_vz(ii, jj) = tem_indice(vz_set, ii, jj, k)
+        in_vz_tot(ii, jj)   = tem_indice(vz_set_tot, ii, jj, k)
+        in_vz(ii, jj)       = tem_indice(vz_set, ii, jj, k)
 
         [viga_interior_singular(ptss[i][j], hvi, xvi, yvi,
 
@@ -753,25 +753,25 @@ viga_interior_singular(p, hvi, xvi, yvi, offset1, offset2) =
     #ncl_set: conjunto de indices de núcleos vazios
 
 #Função que entrega um array de arrays de pontos para criar os núcleos
-nucleo_total(p, dc, nc, dl, nl, h, np, enb, ncl_set) =
+nucleo_total(p, dc, nc, dl, nl, h, enb, ncl_set) =
 
     nucleo_for(
         pts_grelha(
             p, dc * nc, nc, dl * nl, nl),
-        dc, dl, h, np, enb, ncl_set)
+        dc, dl, h, enb, ncl_set)
 
 #Função que seleciona os pontos para criar os núcleos
-nucleo_for(ptss, dc, dl, h, np, enb, ncl_set) =
+nucleo_for(ptss, dc, dl, h, enb, ncl_set) =
 
-    [nucleo_singular(ptss[i][j], dc * kx, dl * ky, h, np, enb)
+    [nucleo_singular(
+        ptss[ncl[1]][ncl[2]],   #coluna e a linha iniciais do núcleo
+        dc * ncl[3],            #número de núcleos consecutivos em x
+        dl * ncl[4],            #número de núcleos consecutivos em y
+        h, ncl[5],              #número de pisos e a altura de cada piso
+        enb)                   #espessura do núcleo
 
-        for i in 1:length(ptss), #i define a coluna
-            j in 1:length(ptss[1]), #j define a linha
-            kx in 0:length(ptss), #kx define o número de nucleos consecutivos em x
-            ky in 0:length(ptss[1]) #ky define o número de nucleos consecutivos em y
-
-        if [i, j, kx, ky] in ncl_set]
-
+    for ncl in ncl_set]
+    
 #Função que cria um núcleo
 nucleo_singular(p, c, l, h, np, enb) =
     subtraction(
@@ -779,28 +779,65 @@ nucleo_singular(p, c, l, h, np, enb) =
         box(p + vxy(enb, enb), p + vxyz(c - enb, l - enb, h * np - enb)))
 
 #Função que cria um set com as posições e dimensões dos núcleos
-nucleos_set_count(ncl_set) =
-    let nucleos_set_count = Set{Tuple{Int,Int}}((n[1], n[2]) for n in ncl_set if n[1] > 0 && n[2] > 0)
-        function count_right(i, j)
-            k = 0
-            while (i + k + 1, j) in nucleos_set_count
-                k += 1
+nucleos_set_count(ncl_set, np) =
+    let
+        #verifica se o núcleo existe
+        tem_nucleo(i, j) =                                          
+            any(n -> n[1] == i && n[2] == j, ncl_set)
+
+        #retorna o núcleo completo
+        pega_nucleo(i, j) =                                        
+            first(n for n in ncl_set if n[1] == i && n[2] == j)
+
+        #conta os núcleos consecutivos para a direita
+        function conta_direita(i, j)
+            c = 0
+            while tem_nucleo(i + c + 1, j)
+                c += 1
             end
-            k
+            c
         end
-        
-        function count_top(i, j)
-            k = 0
-            while (i, j + k + 1) in nucleos_set_count
-                k += 1
+
+        #conta os núcleos consecutivos para cima
+        function conta_cima(i, j)
+            c = 0
+            while tem_nucleo(i, j + c + 1)
+                c += 1
             end
-            k
+            c
         end
-        
-        [[i, j, count_right(i, j) + 1, count_top(i, j) + 1]
-            for (i, j) in nucleos_set_count
-                if !((i - 1, j) in nucleos_set_count)
-                    && !((i, j - 1) in nucleos_set_count)]
+
+        #retorna o núcleo com maior altura dos nucleos consecutivos
+        function core_value(i, j, w, h)
+            cores = [                       #cria um array dos núcleos consecutivos
+                pega_nucleo(ii, jj)
+                for ii in i:(i + w - 1),
+                    jj in j:(j + h - 1)
+                if tem_nucleo(ii, jj)]
+            
+            #cria um array com as alturas dos núcleos consecutivos se o input não for vazio
+            nums = vcat([n[3] for n in cores if !isempty(n[3])]...) 
+            
+            #se o array de alturas estiver vazio, retorna o número de pisos, se não, retorna a maior altura
+            isempty(nums) ? np : maximum(nums)
+        end
+
+        [
+            begin
+                w = conta_direita(i, j) + 1
+                h = conta_cima(i, j) + 1
+
+                #cria um array com nucleo, nº de adjacente para cima e direita e a altura do núcleo
+                [i, j, w, h, core_value(i, j, w, h)]
+            end
+
+            for n in ncl_set                #repete para todos os arrays do input set
+                for i = n[1], j = n[2]      #i é o primeiro elemento do array e j o segundo
+
+            if i > 0 && j > 0 &&            
+               !tem_nucleo(i - 1, j) &&     #não repete se tiver um núcleo ao lado esquerdo
+               !tem_nucleo(i, j - 1)        #não repete se tiver um núcleo abaixo
+        ]
     end
 
 
@@ -818,102 +855,155 @@ nucleos_set_count(ncl_set) =
 
 #Criação de paineis de fachada em todos os pisos
 painel_fachada_total(p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, e_fachada) =
-    [[painel_fachada_piso(p + vz(h * i - h), dc * nc, nc, dl * nl, nl, h, vz_set_tot, e_fachada)
-        for i in 1:np],
-     [painel_fachada_interior_piso(p + vz(h * i - h), dc * nc, nc, dl * nl, nl, dc, dl, h, vz_set, vz_set_tot, e_fachada)
-        for i in 1:np]]
+
+    [[painel_fachada_piso(
+        p + vz(h * k - h), dc * nc, nc, dl * nl, nl, h, vz_set_tot, e_fachada, k)
+
+            for k in 1:np],
+
+     [painel_fachada_interior_piso(
+        p + vz(h * k - h), dc * nc, nc, dl * nl, nl, dc, dl, h, vz_set, vz_set_tot, e_fachada, k) 
+            
+            for k in 1:np]]
 
 #Criação de paineis de fachada em um piso
-painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada) =
+painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada, k) =
+
     #cria a linha inferior de paineis de fachada
     [painel_fachada_for(
-        pts_grelha(p, c, nc, l, nl), h, vz_set_tot,
-        1, 0, #posição (x,y) do p2 relativamente ao p1
-        1, nc, #i define a coluna inicial e final
-        1, 1, #j define a linha inicial e final
-        0, 0, #c1, c2 definem o primeiro indice de vazios
-        0, -1, #c3, c4 definem o segundo indice de vazios
-        0, -e_fachada), #define a oreintação da espessura da fachada
+        pts_grelha(
+            p, c, nc, l, nl), 
+        h, vz_set_tot, k,
+        1, 0,                   #posição (x,y) do p2 relativamente ao p1
+        1, nc,                  #i define a coluna inicial e final
+        1, 1,                   #j define a linha inicial e final
+        0, 0,                   #c1, c2 definem o primeiro indice de vazios
+        0, -1,                  #c3, c4 definem o segundo indice de vazios
+        0, -e_fachada),         #define a oreintação da espessura da fachada
+    
     #cria a linha superior de paineis de fachada
      painel_fachada_for(
-        pts_grelha(p, c, nc, l, nl), h, vz_set_tot,
-        1, 0, #posição (x,y) do p2 relativamente ao p1
-        1, nc, #i define a coluna inicial e final
-        nl + 1, nl + 1, #j define a linha inicial e final
-        0, -1, #c1, c2 definem o primeiro indice de vazios
-        0, 0, #c3, c4 definem o segundo indice de vazios
-        0, e_fachada), #define a oreintação da espessura da fachada
+        pts_grelha(
+            p, c, nc, l, nl), 
+        h, vz_set_tot, k,
+        1, 0,                   #posição (x,y) do p2 relativamente ao p1
+        1, nc,                  #i define a coluna inicial e final
+        nl + 1, nl + 1,         #j define a linha inicial e final
+        0, -1,                  #c1, c2 definem o primeiro indice de vazios
+        0, 0,                   #c3, c4 definem o segundo indice de vazios
+        0, e_fachada),          #define a oreintação da espessura da fachada
+
     #cria a coluna esquerda de paineis de fachada
      painel_fachada_for(
-        pts_grelha(p, c, nc, l, nl), h, vz_set_tot,
-        0, 1, #posição (x,y) do p2 relativamente ao p1
-        1, 1, #i define a coluna inicial e final
-        1, nl, #j define a linha inicial e final
-        0, 0, #c1, c2 definem o primeiro indice de vazios
-        -1, 0, #c3, c4 definem o segundo indice de vazios
-        -e_fachada, 0), #define a oreintação da espessura da fachada
+        pts_grelha(
+            p, c, nc, l, nl), 
+        h, vz_set_tot, k,
+        0, 1,                   #posição (x,y) do p2 relativamente ao p1
+        1, 1,                   #i define a coluna inicial e final
+        1, nl,                  #j define a linha inicial e final
+        0, 0,                   #c1, c2 definem o primeiro indice de vazios
+        -1, 0,                  #c3, c4 definem o segundo indice de vazios
+        -e_fachada, 0),         #define a oreintação da espessura da fachada
+
     #cria a coluna direita de paineis de fachada
      painel_fachada_for(
-        pts_grelha(p, c, nc, l, nl), h, vz_set_tot,
-        0, 1, #posição (x,y) do p2 relativamente ao p1
-        nc + 1, nc + 1, #i define a coluna inicial e final
-        1, nl, #j define a linha inicial e final
-        -1, 0, #c1, c2 definem o primeiro indice de vazios
-        0, 0, #c3, c4 definem o segundo indice de vazios
-        e_fachada, 0)] #define a oreintação da espessura da fachada
+        pts_grelha(
+            p, c, nc, l, nl), 
+        h, vz_set_tot, k,
+        0, 1,                   #posição (x,y) do p2 relativamente ao p1
+        nc + 1, nc + 1,         #i define a coluna inicial e final
+        1, nl,                  #j define a linha inicial e final
+        -1, 0,                  #c1, c2 definem o primeiro indice de vazios
+        0, 0,                   #c3, c4 definem o segundo indice de vazios
+        e_fachada, 0)]          #define a oreintação da espessura da fachada
+
+#Função que seleciona os pontos para criar paineis de fachada
+painel_fachada_for(ptss, h, vz_set_tot, k, i0, j0, i1, i2, j1, j2, c1, c2, c3, c4, ex, ey) =
+    let
+        in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
+
+        [painel_fachada_singular(
+            ptss[i][j], ptss[i + i0][j + j0], h, ex, ey)
+
+        for i in i1:i2, #i define a coluna inicial e final
+            j in j1:j2 #j define a linha inicial e final
+
+        if  !in_vz_tot(i + c1, j + c2) && 
+            !in_vz_tot(i + c3, j + c4)]
+    end
 
 #Cria os paineis de fachada interiores em um piso
-painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_fachada) =
+painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_fachada, k) =
+
     #cria a linha superior das fachadas interiores
     [painel_fachada_interior_for(
-        pts_grelha(p + vy(dl), c, nc, l, nl), h, vz_set, vz_set_tot,
+        pts_grelha(
+            p + vy(dl), c, nc, l, nl),
+        h, vz_set, vz_set_tot, k,
         1, 0, #posição (x,y) do p2 relativamente ao p1
         1, nc,
         1, nl - 1,
         0, 1,
         0, -e_fachada, 0),
+
     #cria a linha inferior das fachadas interiores
      painel_fachada_interior_for(
-        pts_grelha(p, c, nc, l, nl), h, vz_set, vz_set_tot,
+        pts_grelha(
+            p, c, nc, l, nl), 
+        h, vz_set, vz_set_tot, k,
         1, 0, #posição (x,y) do p2 relativamente ao p1
         1, nc,
         2, nl,
         0, -1,
         0, e_fachada, 0),
+
     #cria a coluna esquerda das fachadas interiores
      painel_fachada_interior_for(
-        pts_grelha(p, c, nc, l, nl), h, vz_set, vz_set_tot,
+        pts_grelha(
+            p, c, nc, l, nl), 
+        h, vz_set, vz_set_tot, k,
         0, 1, #posição (x,y) do p2 relativamente ao p1
         2, nc,
         1, nl,
         -1, 0,
         e_fachada, 0, e_fachada),
+
     #cria a coluna direita das fachadas interiores
      painel_fachada_interior_for(
-        pts_grelha(p + vx(dc), c, nc, l, nl), h, vz_set, vz_set_tot,
+        pts_grelha(
+            p + vx(dc), c, nc, l, nl), 
+        h, vz_set, vz_set_tot, k,
         0, 1, #posição (x,y) do p2 relativamente ao p1
         1, nc - 1,
         1, nl,
         1, 0,
         -e_fachada, 0, e_fachada)]
 
-#Função que seleciona os pontos para criar paineis de fachada
-painel_fachada_for(ptss, h, vz_set_tot, i0, j0, i1, i2, j1, j2, c1, c2, c3, c4, ex, ey) =
-    [painel_fachada_singular(ptss[i][j], ptss[i + i0][j + j0], h, ex, ey)
-        for i in i1:i2, #i define a coluna inicial e final
-            j in j1:j2 #j define a linha inicial e final
-                if !([i + c1, j + c2] in vz_set_tot) 
-                && !([i + c3, j + c4] in vz_set_tot)]
+#Função que seleciona os pontos para criar paineis de fachada interiores
+painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, i0, j0, i1, i2, j1, j2, c1, c2, ex, ey, offset) =
+    let
+        in_vz(ii, jj)       = tem_indice(vz_set, ii, jj, k)
+        in_vz_tot(ii, jj)   = tem_indice(vz_set_tot, ii, jj, k)
 
-painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, i0, j0, i1, i2, j1, j2, c1, c2, ex, ey, offset) =
-    [painel_fachada_singular(
-        ptss[i][j] + vy(j==1 ? 0 : (!([i, j - 1] in vz_set) ? offset : 0)), #offset para evitar sobreposição
-        ptss[i + i0][j + j0] - vy(j==(length(ptss[1])-1) ? 0 : (!([i, j + 1] in vz_set) ? offset : 0)),
-        h, ex, ey)
-            for i in i1:i2, #i define a coluna inicial e final
-                j in j1:j2 #j define a linha inicial e final
-                    if ([i, j] in vz_set) #apenas cria nos vazios
-                    && !([i + c1, j + c2] in vz_set_tot)] #não cria se tiver certos vazios adjacentes
+        [painel_fachada_singular(
+            ptss[i][j] + vy(
+                j == 1 ? 0 :
+                !in_vz(i, j - 1) ? offset :     #offset para evitar sobreposição de paineis nos cantos
+                0),
+
+            ptss[i + i0][j + j0] - vy(
+                j == length(ptss[1]) - 1 ? 0 :  #offset para evitar sobreposição de paineis nos cantos
+                !in_vz(i, j + 1) ? offset : 
+                0),
+
+            h, ex, ey)
+
+        for i in i1:i2,                     #i define a coluna inicial e final
+            j in j1:j2                      #j define a linha inicial e final
+
+        if  in_vz(i, j) &&                  #apenas cria nos vazios
+            !in_vz_tot(i + c1, j + c2)]     #não cria se tiver certos vazios adjacentes
+    end
 
 #Função que cria um painel de fachada
 painel_fachada_singular(p1, p2, h, ex, ey) =
@@ -923,21 +1013,41 @@ painel_fachada_singular(p1, p2, h, ex, ey) =
 #Testes de funções
 delete_all_shapes()
 
-edificio_CREE(xyz(0, 0, 0), 4, 7, 6.0, 3.0, 3, 3.0,
-    [[1, 1, []]],
-    [ [2, 3, []], [3, 1, []], [4, 1, []], [6, 1, []], [5, 4, []], [7, 2, []], [7, 4, []], [2, 4, []], [3, 2, []], [4, 2, []]])
+edificio_CREE(
+    xyz(0, 0, 0), 4, 7, 6.0, 3.0, 3, 3.0,
+    [
+        [1, 1, []]
+    ],[
+        [2, 3, [(1:4)...]], [3, 1, [()...]], [4, 1, [(1:5)...]], [6, 1, [(1:2)...]], [5, 4, [()...]], 
+        [7, 2, [1]], [7, 4, [(1:4)...]], [2, 4, [()...]], [3, 2, [()...]], [4, 2, [()...]]
+    ])
 
-edificio_CREE(xyz(0, 50, 0), 2, 20, 6.0, 3.0, 3, 3.0,
-    [[1, 1, [2, 3]], [5, 1, []], [6, 1, []], [8, 1, []], [12, 2, []], [13, 2, []], [15, 1, []], [17, 2, []], [20, 2, []]],
-    [[5, 2, []], [6, 2, []], [15, 2, []], [16, 2, []]])
+edificio_CREE(
+    xyz(0, 50, 0), 2, 20, 6.0, 3.0, 3, 3.0,
+    [
+        [1, 1, [2, 3]], [5, 1, []], [6, 1, []], [8, 1, []], [12, 2, []], [13, 2, []], [15, 1, []], 
+        [17, 2, []], [20, 2, []], [10, 1, [3]], [11, 1, [3]], [12, 1,[2, 3]], [19, 1,[3]], [20, 1,[2, 3]]
+    ],[
+        [5, 2, [()...]], [6, 2, [()...]], [15, 2, [()...]], [16, 2, [()...]]
+    ])
 
-edificio_CREE(xyz(28, 0, 0), 6, 8, 6.0, 3.0, 2, 3.0,
-    [[3, 3, []], [3, 4, []], [4, 3, []], [4, 4, []], [5, 3, []], [5, 4, []], [6, 3, []], [6, 4, []]], 
-    [[2, 2, []], [2, 5, []], [7, 2, []], [7, 5, []]])
+edificio_CREE(
+    xyz(32, 0, 0), 6, 8, 6.0, 3.0, 2, 3.0,
+    [
+        [3, 3, []], [3, 4, []], [4, 3, []], [4, 4, []], [5, 3, []], [5, 4, []], [6, 3, []], [6, 4, []],
+        [3, 2,[2]], [4, 2,[2]], [5, 2,[2]], [6, 2,[2]], [3, 5,[2]], [4, 5,[2]], [5, 5,[2]], [6, 5,[2]]
+    ], [
+        [2, 2, [()...]], [2, 5, [()...]], [7, 2, [()...]], [7, 5, [()...]]
+    ])
 
-edificio_CREE(xyz(65, 0, 0), 3, 5, 6.0, 3.0, 10, 3.0,
-    [[1, 1.,[]], [1, 3, []], [5, 1, []], [5, 3, []]],
-    [[3, 2, []]])
+edificio_CREE(
+    xyz(65, 0, 0), 3, 5, 6.0, 3.0, 10, 3.0,
+    [
+        [1, 1.,[]], [1, 3, []], [5, 1, []], [5, 3, []], [2, 1,[(5:10)...]], [4, 1,[(5:10)...]],
+        [2, 3,[(5:10)...]], [4, 3,[(5:10)...]], [1, 2,[(8:10)...]], [5, 2,[(8:10)...]]
+    ],[
+        [3, 2, [(1:12)...]]
+    ])
 
 grelha = pts_grelha(xyz(0, 0, 0), 18.0, 3, 21.0, 7)
 grelha_4pts(xyz(0, 0, 0), 18.0, 3, 21.0, 7)
