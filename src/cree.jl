@@ -6,12 +6,10 @@ backend(autocad)
 edificio_CREE(p, nl, nc, dl, dc, np, h, vazios_set, nucleos_set) =
     let 
         e_laje = 0.1
-        c_tot = dc * nc
-        l_tot = dl * nl
         apf = 0.2 # largura dos pilares da fachada
         bpf = 0.3 # profundidade dos pilares da fachada
         cpc = 0.3 # largura e profundidade do pilar de canto
-        hvb = 0.3 # Altura da viga de bordadura
+        hvb = 0.4 # Altura da viga de bordadura
         bvb = 0.3 # Largura da viga de bordadura
         hvi = 0.3 # Altura da viga interior
         bvi = 0.3 # Largura da viga interior
@@ -25,13 +23,20 @@ edificio_CREE(p, nl, nc, dl, dc, np, h, vazios_set, nucleos_set) =
         ncl_set = completa_vazios(nucleos_set, np)
         vz_set_tot = vcat([vz_set, ncl_set]...)
 
-        laje_total(p, dc, nc, dl, nl, np, h, e_laje, bvb, bvi, bvL, hvL, vz_set, ncl_set)
-        pilares_fachada_total(p, dc, nc, dl, nl, np, h, apf, bpf, cpc, hvb + e_laje, vz_set_tot, vz_set)
-        pilares_interior_total(p, dc, nc, dl, nl, np, h, hvi + e_laje, api, vz_set_tot)
-        viga_bordadura_total(p, dc, nc, dl, nl, hvb, bvb, h, np, e_laje, vz_set, ncl_set)
-        viga_interior_total(p, dc, nc, dl, nl, h, np, hvi, bvi, e_laje, bvb, vz_set_tot, vz_set)
-        nucleo_total(p, dc, nc, dl, nl, h, enb, nucleos_set_count(ncl_set, np))
-        painel_fachada_total(p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, e_fachada)
+        laje_total(
+            p, dc, nc, dl, nl, np, h, e_laje, bvb, bvi, bvL, hvL, vz_set, ncl_set)
+        pilares_fachada_total(
+            p, dc, nc, dl, nl, np, h, apf, bpf, cpc, hvb + e_laje, vz_set_tot, vz_set)
+        pilares_interior_total(
+            p, dc, nc, dl, nl, np, h, hvi + e_laje, api, vz_set_tot)
+        viga_bordadura_total(
+            p, dc, nc, dl, nl, hvb, bvb, h, np, e_laje, vz_set, ncl_set)
+        viga_interior_total(
+            p, dc, nc, dl, nl, h, np, hvi, bvi, e_laje, bvb, vz_set_tot, vz_set)
+        nucleo_total(
+            p, dc, nc, dl, nl, h, enb, nucleos_set_count(ncl_set, np))
+        painel_fachada_total(
+            p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, e_fachada)
     end
 
 
@@ -78,7 +83,7 @@ grelha_4pts(p, l_tot, n, c_tot, m) =
 laje_total(p, dc, nc, dl, nl, np, h, e_laje, bvb, bvi, bvL, hvL, vz_set, ncl_set) =
 
     [laje_piso(
-        p + vz(h * k - e_laje/2), dc, nc, dl, nl, e_laje,
+        p + vz(h * k), dc, nc, dl, nl, e_laje,
         bvb, bvi, bvL, hvL, vz_set, ncl_set, k)
 
             for k in 1:np]
@@ -112,6 +117,11 @@ laje_singular(pts, e_laje, nc, nl, bvb, bvi, bvL, hvL, i, j, k, vz_set, ncl_set)
         in_vazio(ii, jj)  = tem_indice(vz_set, ii, jj, k)
         in_nucleo(ii, jj) = tem_indice(ncl_set, ii, jj, k)
 
+        laje_familia = slab_family_element(
+            default_slab_family(), thickness = e_laje)
+        viga_laje_famlia = beam_family_element(
+            default_beam_family(), profile = top_aligned_rectangular_profile(width = bvL, height = hvL))
+
         # offset inferior em y das vigas da laje
         offset_1 =
             in_nucleo(i, j - 1) ? 0 :       #estende a viga até ao nucleo
@@ -126,28 +136,35 @@ laje_singular(pts, e_laje, nc, nl, bvb, bvi, bvL, hvL, i, j, k, vz_set, ncl_set)
             in_vazio(i, j + 1)  ? bvb :     #reduz a viga para encaixar na viga de bordadura interior           
                                    bvi / 2  #reduz a viga para encaixar nas vigas interiores
 
+        with(default_beam_family, viga_laje_famlia) do
+
             # cria laje
-            [thicken(surface_polygon(pts), -e_laje),
+            [slab(closed_polygonal_path(pts), level(0), laje_familia),
 
             # viga esquerda
             i == 1 || in_vazio(i - 1, j) ? nothing :    #não cria na primeira coluna ou se vazio na coluna anterior
-                box(
-                    pts[1] + vyz(offset_1, -e_laje / 2),
-                    pts[4] + vxyz(bvL, -offset_2, -hvL - e_laje / 2)),
+                beam(
+                    pts[1] + vxyz(bvL/2, offset_1, -e_laje),
+                    pts[4] + vxyz(bvL/2, -offset_2, - e_laje)),
 
             # viga direita
             i == nc || in_vazio(i + 1, j) ? nothing :    #não cria na ultima coluna ou se vazio na coluna posterior
-                box(
-                    pts[2] + vyz(offset_1, -e_laje / 2),
-                    pts[3] + vxyz(-bvL, -offset_2, -hvL - e_laje / 2)),
+                beam(
+                    pts[2] + vxyz(-bvL/2, offset_1, -e_laje),
+                    pts[3] + vxyz(-bvL/2, -offset_2, - e_laje)),
 
             # vigas centrais
-            box(
-                intermediate_loc(pts[1], pts[2]) + vyz(offset_1, -e_laje / 2),
-                intermediate_loc(pts[3], pts[4]) + vxyz(-bvL, -offset_2, -hvL - e_laje / 2)),
-            box(
-                intermediate_loc(pts[1], pts[2]) + vyz(offset_1, -e_laje / 2),
-                intermediate_loc(pts[3], pts[4]) + vxyz(bvL, -offset_2, -hvL - e_laje / 2))]
+            beam(
+                intermediate_loc(
+                    pts[1], pts[2]) + vxyz(-bvL/2, offset_1, -e_laje),
+                intermediate_loc(
+                    pts[3], pts[4]) + vxyz(-bvL/2, -offset_2, - e_laje)),
+            beam(
+                intermediate_loc(
+                    pts[1], pts[2]) + vxyz(bvL/2, offset_1, -e_laje),
+                intermediate_loc(
+                    pts[3], pts[4]) + vxyz(bvL/2, -offset_2, - e_laje))]
+        end
     end
 
 
@@ -244,7 +261,7 @@ pilares_fachada_for(ptss, x, y, h, vz_set_tot, k, i1, i2, i3, j1, j2, j3, c1, c2
     let
         in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
 
-        [pilar_singular(ptss[i][j], h, x, y)
+        [pilar_singular(ptss[i][j] + vxy(x/2, y/2), h, x, y)
 
             for i in i1:i2:i3,  #i define a coluna inicial e final
                 j in j1:j2:j3   #j define a linha inicial e final
@@ -258,7 +275,7 @@ pilares_cantos_for(ptss, c, h, vz_set_tot, k) =
     let
         in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
     
-        [pilar_singular(ptss[i][j], h, c, c)
+        [pilar_singular(ptss[i][j] + vxy(c/2, c/2), h, c, c)
             
             for i in 1:(length(ptss)-1):length(ptss),       #i define a coluna inicial e final
                 j in 1:(length(ptss[1])-1):length(ptss[1])  #j define a linha inicial e final
@@ -351,7 +368,7 @@ pilares_fachada_interior_for(ptss, x, y, h, vz_set_tot, vz_set, k, i1, i2, j1, j
         in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
         in_vz(ii, jj) = tem_indice(vz_set, ii, jj, k)
     
-    [pilar_singular(ptss[i][j], h, x, y)
+    [pilar_singular(ptss[i][j] + vxy(x/2, y/2), h, x, y)
 
         for i in i1:i2,                 #i define a coluna inicial e final
             j in j1:j2                  #j define a linha inicial e final
@@ -410,7 +427,7 @@ pilares_cantos_interiores_for(ptss, x, y, h, vz_set_tot, vz_set, k, i1, i2, j1, 
         in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
         in_vz(ii, jj) = tem_indice(vz_set, ii, jj, k)
 
-        [pilar_singular(ptss[i][j], h, x, y)
+        [pilar_singular(ptss[i][j] + vxy(x/2, y/2), h, x, y)
 
         for i in i1:i2,                     #i define a coluna inicial e final
             j in j1:j2                      #j define a linha inicial e final
@@ -423,7 +440,12 @@ pilares_cantos_interiores_for(ptss, x, y, h, vz_set_tot, vz_set, k, i1, i2, j1, 
 
 #Função que cria um pilar
 pilar_singular(p1, h, a, b) =
-    box(p1, p1 + vxyz(a, b, h))
+    let
+        pilar_glulam_familia = column_family_element(
+            default_column_family(), profile = rectangular_profile(width = b, height = a))
+
+        free_column(p1, p1 + vz(h), 0, pilar_glulam_familia)
+    end
 
 
 #Funções de pilares interiores
@@ -473,7 +495,12 @@ pilares_interiores_for(ptss, h, api, vz_set_tot, k) =
 
 #Função que cria um pilar
 pilar_interior(p, api, h) =
-    box(p - vxy(api/2, api/2), p + vxyz(api/2, api/2, h))
+    let
+        pilar_betao_familia = column_family_element(
+            default_column_family(), profile = rectangular_profile(width = api, height = api))
+
+        free_column(p, p + vz(h), 0, pilar_betao_familia)
+    end
 
     
 #Funções de vigas de bordadura
@@ -512,9 +539,9 @@ viga_bordadura_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k) =
         #Cria a linha inferior
         [viga_bordadura_for(
             pts_grelha(
-                p - vz(hvb + e),
+                p + vyz(bvb/2, -e),
             dc * nc, nc, dl * nl - bvb, nl),
-            hvb, dc, bvb, vz_set_tot, k,
+            bvb, hvb, dc, 0, vz_set_tot, k,
             0, 0,                           #offset em (x, y) da viga incial e final
             1, nc,                          #i define a coluna inicial e final
             1, 1,                           #j define a linha inicial e final
@@ -523,9 +550,9 @@ viga_bordadura_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k) =
         #Cria a linha superior
         viga_bordadura_for( 
             pts_grelha(
-                p - vz(hvb + e),
+                p + vyz(-bvb/2, -e),
             dc * nc, nc, dl * nl, nl),
-            hvb, dc, -bvb, vz_set_tot, k,
+            bvb, hvb, dc, 0, vz_set_tot, k,
             0, 0,                           #offset em (x, y) da viga incial e final
             1, nc,                          #i define a coluna inicial e final
             nl + 1, nl + 1,                 #j define a linha inicial e final
@@ -534,9 +561,9 @@ viga_bordadura_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k) =
         #cria a coluna esquerda
         viga_bordadura_for(
             pts_grelha(
-                p - vz(hvb + e),
+                p + vxz(bvb/2, -e),
             dc * nc, nc, dl * nl, nl),
-            hvb, bvb, dl, vz_set_tot, k,
+            bvb, hvb, 0, dl, vz_set_tot, k,
             0, bvb,                         #offset em (x, y) da viga incial e final
             1, 1,                           #i define a coluna inicial e final
             1, nl,                          #j define a linha inicial e final
@@ -545,9 +572,9 @@ viga_bordadura_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k) =
         #cria a coluna direita
         viga_bordadura_for(
             pts_grelha(
-                p - vz(hvb + e),
+                p + vxz(-bvb/2, -e),
             dc * nc, nc, dl * nl, nl),
-            hvb, -bvb, dl, vz_set_tot, k,
+            bvb, hvb, 0, dl, vz_set_tot, k,
             0, bvb,                         #offset em (x, y) da viga incial e final
             nc + 1, nc + 1,                 #i define a coluna inicial e final
             1, nl,                          #j define a linha inicial e final
@@ -555,11 +582,11 @@ viga_bordadura_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k) =
     end
 
 #Função que seleciona pontos para criar uma viga de bordadura_linha na fachada do ediifico
-viga_bordadura_for(ptss, hvb, xvb, yvb, vz_set_tot, k, offsetx, offsety, c1, c2, c3, c4, i1, j1) =
+viga_bordadura_for(ptss, bvb, hvb, xvb, yvb, vz_set_tot, k, offsetx, offsety, c1, c2, c3, c4, i1, j1) =
     let
         in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
 
-        [viga_bordadura_singular(ptss[i][j], hvb, xvb, yvb,
+        [viga_bordadura_singular(ptss[i][j], bvb, hvb, xvb, yvb,
 
             #define o offset em x
             i == 1 ? offsetx : 0,                         #aplica offset se for a primeira coluna
@@ -583,9 +610,9 @@ viga_bordadura_interior_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k)
         #cria as linhas superiores de vigas de bordadura
         [viga_bordadura_for_interior(
             pts_grelha(
-                p - vz(hvb + e), 
+                p + vyz(bvb/2, -e), 
             dc * nc, nc, dl * nl, nl),
-            hvb, dc, bvb, vz_set, vz_set_tot, ncl_set, k,
+            bvb, hvb, dc, 0, vz_set, vz_set_tot, ncl_set, k,
             0, 0,                                       #i0, j0
             bvb, 0,                                     #offset em (x, y) da viga incial e final
             0, 0,                                       #i1, i2
@@ -596,9 +623,9 @@ viga_bordadura_interior_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k)
         #cria as linhas inferiores de vigas de bordadura
          viga_bordadura_for_interior(
             pts_grelha(
-                p - vz(hvb + e), 
+                p + vyz(-bvb/2, -e), 
             dc * nc, nc, dl * nl, nl),
-            hvb, dc, -bvb, vz_set, vz_set_tot, ncl_set, k,
+            bvb, hvb, dc, 0, vz_set, vz_set_tot, ncl_set, k,
             0, 1,                                       #i0, j0
             bvb, 0,                                     #offset em (x, y) da viga incial e final
             0, 0,                                       #i1, i2
@@ -609,9 +636,9 @@ viga_bordadura_interior_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k)
         #cria as colunas direitas de vigas de bordadura
          viga_bordadura_for_interior(
             pts_grelha(
-                p - vz(hvb + e), 
+                p + vxz(bvb/2, -e), 
             dc * nc, nc, dl * nl, nl),
-            hvb, bvb, dl, vz_set, vz_set_tot, ncl_set, k,
+            bvb, hvb, 0, dl, vz_set, vz_set_tot, ncl_set, k,
             0, 0,                                       #i0, j0
             0, bvb,                                     #offset em (x, y) da viga incial e final
             -1, -1,                                     #i1, i2
@@ -622,9 +649,9 @@ viga_bordadura_interior_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k)
         #cria as colunas esquerdas de vigas de bordadura
          viga_bordadura_for_interior(
             pts_grelha(
-                p - vz(hvb + e), 
+                p + vxz(-bvb/2, -e), 
             dc * nc, nc, dl * nl, nl),
-            hvb, -bvb, dl, vz_set, vz_set_tot, ncl_set, k,
+            bvb, hvb, 0, dl, vz_set, vz_set_tot, ncl_set, k,
             1, 0,                                       #i0, j0
             0, bvb,                                     #offset em (x, y) da viga incial e final
             1, 1,                                       #i1, i2
@@ -634,14 +661,14 @@ viga_bordadura_interior_piso(p, dc, nc, dl, nl, hvb, bvb, e, vz_set, ncl_set, k)
     end
 
 #função que seleciona os pontos para criar as vigas de bordadura interiores
-viga_bordadura_for_interior(ptss, hvb, xvb, yvb, vz_set, vz_set_tot, ncl_set, k, i0, j0, offsetx, offsety, i1, i2, i3, i4, j1, j2, c1, c2) =
+viga_bordadura_for_interior(ptss, bvb, hvb, xvb, yvb, vz_set, vz_set_tot, ncl_set, k, i0, j0, offsetx, offsety, i1, i2, i3, i4, j1, j2, c1, c2) =
     let
         in_vz(ii, jj)       = tem_indice(vz_set, ii, jj, k)
         in_vz_tot(ii, jj)   = tem_indice(vz_set_tot, ii, jj, k)
         in_ncl(ii, jj)      = tem_indice(ncl_set, ii, jj, k)
 
         [viga_bordadura_singular(
-            ptss[i + i0][j + j0], hvb, xvb, yvb,
+            ptss[i + i0][j + j0], bvb, hvb, xvb, yvb,
 
             #define o offset em x
             i == 1 ? offsetx : 0,                   #aplica offset se for a primeira coluna
@@ -669,9 +696,15 @@ viga_bordadura_for_interior(ptss, hvb, xvb, yvb, vz_set, vz_set_tot, ncl_set, k,
     end
 
 #Função que cria uma viga de bordadura
-viga_bordadura_singular(p, hvb, xvb, yvb, offset1x, offset2x, offset1y, offset2y) =
-    [box(p + vxy(offset1x, offset1y),
-         p + vxyz(xvb - offset2x, yvb - offset2y, hvb))] 
+viga_bordadura_singular(p, bvb, hvb, xvb, yvb, offset1x, offset2x, offset1y, offset2y) =
+    let
+        viga_bordadura_familia = beam_family_element(
+            default_beam_family(), profile = top_aligned_rectangular_profile(width = bvb, height = hvb))
+
+        [beam(p + vxy(offset1x, offset1y),
+             p + vxy(xvb - offset2x, yvb - offset2y),
+             0, viga_bordadura_familia)] 
+    end
 
 
 #Funções de vigas interiores
@@ -702,17 +735,16 @@ viga_interior_piso(p, dc, nc, dl, nl, hvi, bvi, e, bvb, vz_set_tot, vz_set, k) =
 
     [viga_interior_for(
         pts_grelha(
-            p + vyz( -bvi/2, -hvi - e),
-        dc * nc, nc, dl * nl, nl),
+            p + vz(- e), dc * nc, nc, dl * nl, nl),
         hvi, dc, bvi, bvb, vz_set_tot, vz_set, k)]
 
 #Função que seleciona os pontos para criar as vigas interiores
-viga_interior_for(ptss, hvi, xvi, yvi, offset, vz_set_tot, vz_set, k) =
+viga_interior_for(ptss, hvi, L, bvi, offset, vz_set_tot, vz_set, k) =
     let
         in_vz_tot(ii, jj)   = tem_indice(vz_set_tot, ii, jj, k)
         in_vz(ii, jj)       = tem_indice(vz_set, ii, jj, k)
 
-        [viga_interior_singular(ptss[i][j], hvi, xvi, yvi,
+        [viga_interior_singular(ptss[i][j], hvi, L, bvi,
 
         #define o offset em x à esquerda
         i == 1 ? offset :                   #aplica offset na primieira coluna
@@ -734,10 +766,16 @@ viga_interior_for(ptss, hvi, xvi, yvi, offset, vz_set_tot, vz_set, k) =
     end
 
 #Função que cria as vigas interiores
-viga_interior_singular(p, hvi, xvi, yvi, offset1, offset2) =
-    box(
-        p + vx(offset1),
-        p + vxyz(xvi - offset2, yvi, hvi))
+viga_interior_singular(p, hvi, L, bvi, offset1, offset2) =
+    let 
+        viga_interior_familia = beam_family_element(
+            default_beam_family(), profile = top_aligned_rectangular_profile(width = bvi, height = hvi))
+
+        beam(
+            p + vx(offset1),
+            p + vx(L - offset2),
+            0, viga_interior_familia)
+    end
 
 
 #Funções de núcleos
@@ -748,7 +786,6 @@ viga_interior_singular(p, hvi, xvi, yvi, offset1, offset2) =
     #dl: distância entre as linhas
     #nl: número de linhas
     #h: altura de cada piso
-    #np: número de pisos
     #enb: espessura do núcleo de betão
     #ncl_set: conjunto de indices de núcleos vazios
 
@@ -774,9 +811,16 @@ nucleo_for(ptss, dc, dl, h, enb, ncl_set) =
     
 #Função que cria um núcleo
 nucleo_singular(p, c, l, h, np, enb) =
-    subtraction(
-        box(p, p + vxyz(c, l, h * np)),
-        box(p + vxy(enb, enb), p + vxyz(c - enb, l - enb, h * np - enb)))
+    let
+        parede_nucleo_familia = wall_family_element(
+            default_wall_family(), thickness = enb)
+        
+        roof_nucleo_familia = roof_family_element(
+            default_roof_family(), thickness = enb)
+
+        wall(rectangular_path(p, c, l), level(0), level(np * h - enb), parede_nucleo_familia)
+        roof(rectangular_path(p, c, l), level(np * h - enb), roof_nucleo_familia)
+    end
 
 #Função que cria um set com as posições e dimensões dos núcleos
 nucleos_set_count(ncl_set, np) =
@@ -851,7 +895,8 @@ nucleos_set_count(ncl_set, np) =
     #h: altura de cada piso
     #np: número de pisos
     #e_fachada: espessura do painel de fachada
-    #vz_set: conjunto de indices de paineis de fachada vazios
+    #vz_set: conjunto de indices vazios
+    #vz_set_tot: conjunto de indices vazios e nucleos
 
 #Criação de paineis de fachada em todos os pisos
 painel_fachada_total(p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, e_fachada) =
@@ -872,58 +917,58 @@ painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada, k) =
     #cria a linha inferior de paineis de fachada
     [painel_fachada_for(
         pts_grelha(
-            p, c, nc, l, nl), 
+            p + vy(-e_fachada/2), c, nc, l, nl), 
         h, vz_set_tot, k,
         1, 0,                   #posição (x,y) do p2 relativamente ao p1
         1, nc,                  #i define a coluna inicial e final
         1, 1,                   #j define a linha inicial e final
         0, 0,                   #c1, c2 definem o primeiro indice de vazios
         0, -1,                  #c3, c4 definem o segundo indice de vazios
-        0, -e_fachada),         #define a oreintação da espessura da fachada
+        e_fachada),         #define a oreintação da espessura da fachada
     
     #cria a linha superior de paineis de fachada
      painel_fachada_for(
         pts_grelha(
-            p, c, nc, l, nl), 
+            p + vy(e_fachada/2), c, nc, l, nl), 
         h, vz_set_tot, k,
         1, 0,                   #posição (x,y) do p2 relativamente ao p1
         1, nc,                  #i define a coluna inicial e final
         nl + 1, nl + 1,         #j define a linha inicial e final
         0, -1,                  #c1, c2 definem o primeiro indice de vazios
         0, 0,                   #c3, c4 definem o segundo indice de vazios
-        0, e_fachada),          #define a oreintação da espessura da fachada
+        e_fachada),          #define a oreintação da espessura da fachada
 
     #cria a coluna esquerda de paineis de fachada
      painel_fachada_for(
         pts_grelha(
-            p, c, nc, l, nl), 
+            p + vx(-e_fachada/2), c, nc, l, nl), 
         h, vz_set_tot, k,
         0, 1,                   #posição (x,y) do p2 relativamente ao p1
         1, 1,                   #i define a coluna inicial e final
         1, nl,                  #j define a linha inicial e final
         0, 0,                   #c1, c2 definem o primeiro indice de vazios
         -1, 0,                  #c3, c4 definem o segundo indice de vazios
-        -e_fachada, 0),         #define a oreintação da espessura da fachada
+        e_fachada),         #define a oreintação da espessura da fachada
 
     #cria a coluna direita de paineis de fachada
      painel_fachada_for(
         pts_grelha(
-            p, c, nc, l, nl), 
+            p + vx(e_fachada/2), c, nc, l, nl), 
         h, vz_set_tot, k,
         0, 1,                   #posição (x,y) do p2 relativamente ao p1
         nc + 1, nc + 1,         #i define a coluna inicial e final
         1, nl,                  #j define a linha inicial e final
         -1, 0,                  #c1, c2 definem o primeiro indice de vazios
         0, 0,                   #c3, c4 definem o segundo indice de vazios
-        e_fachada, 0)]          #define a oreintação da espessura da fachada
+        e_fachada)]          #define a oreintação da espessura da fachada
 
 #Função que seleciona os pontos para criar paineis de fachada
-painel_fachada_for(ptss, h, vz_set_tot, k, i0, j0, i1, i2, j1, j2, c1, c2, c3, c4, ex, ey) =
+painel_fachada_for(ptss, h, vz_set_tot, k, i0, j0, i1, i2, j1, j2, c1, c2, c3, c4, e) =
     let
         in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
 
         [painel_fachada_singular(
-            ptss[i][j], ptss[i + i0][j + j0], h, ex, ey)
+            ptss[i][j], ptss[i + i0][j + j0], h, e)
 
         for i in i1:i2, #i define a coluna inicial e final
             j in j1:j2 #j define a linha inicial e final
@@ -938,49 +983,49 @@ painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_f
     #cria a linha superior das fachadas interiores
     [painel_fachada_interior_for(
         pts_grelha(
-            p + vy(dl), c, nc, l, nl),
+            p + vy(dl - e_fachada/2), c, nc, l, nl),
         h, vz_set, vz_set_tot, k,
         1, 0, #posição (x,y) do p2 relativamente ao p1
         1, nc,
         1, nl - 1,
         0, 1,
-        0, -e_fachada, 0),
+        e_fachada, 0),
 
     #cria a linha inferior das fachadas interiores
      painel_fachada_interior_for(
         pts_grelha(
-            p, c, nc, l, nl), 
+            p + vy(e_fachada/2), c, nc, l, nl), 
         h, vz_set, vz_set_tot, k,
         1, 0, #posição (x,y) do p2 relativamente ao p1
         1, nc,
         2, nl,
         0, -1,
-        0, e_fachada, 0),
+        e_fachada, 0),
 
     #cria a coluna esquerda das fachadas interiores
      painel_fachada_interior_for(
         pts_grelha(
-            p, c, nc, l, nl), 
+            p + vx(e_fachada/2), c, nc, l, nl), 
         h, vz_set, vz_set_tot, k,
         0, 1, #posição (x,y) do p2 relativamente ao p1
         2, nc,
         1, nl,
         -1, 0,
-        e_fachada, 0, e_fachada),
+        e_fachada, e_fachada),
 
     #cria a coluna direita das fachadas interiores
      painel_fachada_interior_for(
         pts_grelha(
-            p + vx(dc), c, nc, l, nl), 
+            p + vx(dc - e_fachada/2), c, nc, l, nl), 
         h, vz_set, vz_set_tot, k,
         0, 1, #posição (x,y) do p2 relativamente ao p1
         1, nc - 1,
         1, nl,
         1, 0,
-        -e_fachada, 0, e_fachada)]
+        e_fachada, e_fachada)]
 
 #Função que seleciona os pontos para criar paineis de fachada interiores
-painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, i0, j0, i1, i2, j1, j2, c1, c2, ex, ey, offset) =
+painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, i0, j0, i1, i2, j1, j2, c1, c2, e, offset) =
     let
         in_vz(ii, jj)       = tem_indice(vz_set, ii, jj, k)
         in_vz_tot(ii, jj)   = tem_indice(vz_set_tot, ii, jj, k)
@@ -996,7 +1041,7 @@ painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, i0, j0, i1, i2, j1, 
                 !in_vz(i, j + 1) ? offset : 
                 0),
 
-            h, ex, ey)
+            h, e)
 
         for i in i1:i2,                     #i define a coluna inicial e final
             j in j1:j2                      #j define a linha inicial e final
@@ -1006,8 +1051,21 @@ painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, i0, j0, i1, i2, j1, 
     end
 
 #Função que cria um painel de fachada
-painel_fachada_singular(p1, p2, h, ex, ey) =
-    box(p1, p2 + vxyz(ex, ey, h/2))
+painel_fachada_singular(p1, p2, h, e) =
+    let
+        painel_fachada_familia = wall_family_element(
+            default_wall_family(), thickness = e)
+
+        janela_familia = window_family_element(
+            default_window_family(), 
+                width       = distance(p1, p2) /4, 
+                height      = h/2, 
+                thickness   = 0.05)
+
+        add_window(
+            wall(polygonal_path(p1, p2), level(0), level(h), painel_fachada_familia),
+            xy(distance(p1, p2)/4, h/4), janela_familia)
+    end
 
 
 #Testes de funções
@@ -1049,22 +1107,8 @@ edificio_CREE(
         [3, 2, [(1:12)...]]
     ])
 
-grelha = pts_grelha(xyz(0, 0, 0), 18.0, 3, 21.0, 7)
-grelha_4pts(xyz(0, 0, 0), 18.0, 3, 21.0, 7)
-vcat(grelha_4pts(xyz(0, 0, 0), 18.0, 3, 21.0, 7)...)
 
-viga_interior_grelha(xyz(0, 0, 0), 18.0, 7, 21.0, 3, 3.0, 3.0, 3.0, 0.0)
+slab(circular_path(u0(), 10), level(10))
 
-grelha[2][1]
+beam(y(4), y(10))
 
-vz_set = [[1, 1], [2, 3]]
-vz_set[1]
-
-ncl_set([[1, 1], [2, 3], [3, 1], [4, 1], [6, 1], [5, 4], [7, 2], [7, 4], [2, 4], [3, 2], [4, 2]])
-
-
-
-wall()
-
-
-i = [1, 1, [max((1:10)...)]]
