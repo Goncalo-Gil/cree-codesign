@@ -18,14 +18,19 @@ edificio_CREE(p, nl, nc, dl, dc, np, h, vazios_set, nucleos_set) =
         hvL = 0.3 # Altura das vigas da laje
         bvL = 0.2 # Largura das vigas da laje
         e_fachada = 0.1 # Espessura da fachada
+        alfa = pi/4
+
 
         vz_set = completa_vazios(vazios_set, np)
         ncl_set = completa_vazios(nucleos_set, np)
         vz_set_tot = vcat([vz_set, ncl_set]...)
 
 
-        laje_total(
-            p, dc, nc, dl, nl, np, h, e_laje, bvb, bvi, bvL, hvL, vz_set, ncl_set)
+        with(current_cs, cs_from_o_vx_vy(xy(0,0), vpol(1, alfa), vpol(1, alfa + pi/2))) do
+            laje_total(
+                p, dc, nc, dl, nl, np, h, e_laje, bvb, bvi, bvL, hvL, vz_set, ncl_set)
+        end
+        
         pilares_fachada_total(
             p, dc, nc, dl, nl, np, h, apf, bpf, cpc, hvb + e_laje, vz_set_tot, vz_set)
         pilares_interior_total(
