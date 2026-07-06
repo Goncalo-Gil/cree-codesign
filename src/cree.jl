@@ -1129,7 +1129,7 @@ delete_all_shapes()
 edificio_CREE(
     xyz(0, 0, 0), 4, 7, 6.0, 3.0, 3, 3.0, xyz(3, 0, 0), pi/4,
     [
-        [1, 0.5, 1, 2] #janelas das linhas, [offset horizontal, cota parapeito, h da janela, l da janela]
+        [1, 0.5, 1, 2] #janelas das linhas, [offset horizontal, cota parapeito, l da janela, h da janela]
     ],[
         [1, 0.5, 1, 2], [4, 0.5, 1, 2] #janelas da colunas
     ],[
@@ -1177,28 +1177,3 @@ edificio_CREE(
     ],[
         [3, 2, [(1:12)...]]
     ])
-
-
-slab(circular_path(u0(), 10), level(10))
-
-beam(y(4), y(10))
-
-
-
-alfa = pi/4
-with(current_cs, cs_from_o_vx_vy(xy(70,0), vpol(1, alfa), vpol(1, alfa + pi/2))) do
-    line.(map_division((i,j) -> xy(-5 + i, -2.5 + j), 0, 10, 10, 0, 5, 5))
-end
-
-itera_quads(ptss) =
-     [[[p0,p1,p2,p3]
-           for (p0,p1,p2,p3)
-           in zip(pts0[1:end-1],
-                  pts1[1:end-1],
-                  pts1[2:end],
-                  pts0[2:end])]
-          for (pts0,pts1)
-          in zip(ptss[1:end-1], ptss[2:end])]
-malha = map_division((i,j) -> xy(i + sin(i*j),j), 0, 90, 10, 0, 60, 12)
-malha_quads = vcat(itera_quads(malha)...)
-polygon.(malha_quads)
