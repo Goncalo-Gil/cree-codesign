@@ -1,9 +1,10 @@
 using Khepri
 backend(autocad)
+backend(revit)
 
 #Função principal
 
-edificio_CREE(p, nl, nc, dl, dc, np, h, p0, phi0, vazios_set, nucleos_set) =
+edificio_CREE(p, nl, nc, dl, dc, np, h, p0, phi0, janelas_set_l, janelas_set_c, vazios_set, nucleos_set) =
     let 
         e_laje = 0.1
         apf = 0.2 # largura dos pilares da fachada
@@ -36,7 +37,7 @@ edificio_CREE(p, nl, nc, dl, dc, np, h, p0, phi0, vazios_set, nucleos_set) =
         nucleo_total(
             p, dc, nc, dl, nl, h, enb, nucleos_set_count(ncl_set, np), p0, phi0)
         painel_fachada_total(
-            p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, e_fachada, p0, phi0)
+            p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, janelas_set_l, janelas_set_c, e_fachada, p0, phi0)
     end
 
 
@@ -53,7 +54,7 @@ tem_indice(set_1, i, j, k) =
 
 #rotaciona um ponto p1 em relação a outro ponto p0
 p_rotate(p0, p1, phi) = 
-    p0 + vcyl(distance(p0 + vz(p1.z), p1), atan(abs(p1.y - p0.y) / abs(p1.x - p0.x)) + phi, p1.z)
+    p0 + vcyl(distance(p0 + vz(p1.z), p1), atan((p1.y - p0.y), (p1.x - p0.x)) + phi, p1.z)
 
 
 #Funções de grelhas de pontos
@@ -934,26 +935,26 @@ nucleos_set_count(ncl_set, np) =
     #vz_set_tot: conjunto de indices vazios e nucleos
 
 #Criação de paineis de fachada em todos os pisos
-painel_fachada_total(p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, e_fachada, p0, phi0) =
+painel_fachada_total(p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, jan_set_l, jan_set_c, e_fachada, p0, phi0) =
 
     [[painel_fachada_piso(
-        p + vz(h * k - h), dc * nc, nc, dl * nl, nl, h, vz_set_tot, e_fachada, k, p0, phi0)
+        p + vz(h * k - h), dc * nc, nc, dl * nl, nl, h, vz_set_tot, jan_set_l, jan_set_c, e_fachada, k, p0, phi0)
 
             for k in 1:np],
 
      [painel_fachada_interior_piso(
-        p + vz(h * k - h), dc * nc, nc, dl * nl, nl, dc, dl, h, vz_set, vz_set_tot, e_fachada, k, p0, phi0) 
+        p + vz(h * k - h), dc * nc, nc, dl * nl, nl, dc, dl, h, vz_set, vz_set_tot, jan_set_l, jan_set_c, e_fachada, k, p0, phi0) 
             
             for k in 1:np]]
 
 #Criação de paineis de fachada em um piso
-painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada, k, p0, phi0) =
+painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, jan_set_l, jan_set_c, e_fachada, k, p0, phi0) =
 
     #cria a linha inferior de paineis de fachada
     [painel_fachada_for(
         pts_grelha(
             p + vy(-e_fachada/2), c, nc, l, nl), 
-        h, vz_set_tot, k, p0, phi0,
+        h, vz_set_tot, jan_set_l, k, p0, phi0,
         0, 0,
         1, 0,                   #posição (x,y) do p2 relativamente ao p1
         1, nc,                  #i define a coluna inicial e final
@@ -966,7 +967,7 @@ painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada, k, p0, phi0) =
      painel_fachada_for(
         pts_grelha(
             p + vy(e_fachada/2), c, nc, l, nl), 
-        h, vz_set_tot, k, p0, phi0,
+        h, vz_set_tot, jan_set_l, k, p0, phi0,
         1, 0,
         0, 0,                   #posição (x,y) do p2 relativamente ao p1
         1, nc,                  #i define a coluna inicial e final
@@ -979,7 +980,7 @@ painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada, k, p0, phi0) =
      painel_fachada_for(
         pts_grelha(
             p + vx(-e_fachada/2), c, nc, l, nl), 
-        h, vz_set_tot, k, p0, phi0,
+        h, vz_set_tot, jan_set_c, k, p0, phi0,
         0, 1,
         0, 0,                   #posição (x,y) do p2 relativamente ao p1
         1, 1,                   #i define a coluna inicial e final
@@ -992,7 +993,7 @@ painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada, k, p0, phi0) =
      painel_fachada_for(
         pts_grelha(
             p + vx(e_fachada/2), c, nc, l, nl), 
-        h, vz_set_tot, k, p0, phi0,
+        h, vz_set_tot, jan_set_c, k, p0, phi0,
         0, 0,
         0, 1,                   #posição (x,y) do p2 relativamente ao p1
         nc + 1, nc + 1,         #i define a coluna inicial e final
@@ -1002,12 +1003,12 @@ painel_fachada_piso(p, c, nc, l, nl, h, vz_set_tot, e_fachada, k, p0, phi0) =
         e_fachada)]         
 
 #Função que seleciona os pontos para criar paineis de fachada
-painel_fachada_for(ptss, h, vz_set_tot, k, p0, phi0, i00, j00, i01, j01, i1, i2, j1, j2, c1, c2, c3, c4, e) =
+painel_fachada_for(ptss, h, vz_set_tot, janelas_set, k, p0, phi0, i00, j00, i01, j01, i1, i2, j1, j2, c1, c2, c3, c4, e) =
     let
         in_vz_tot(ii, jj) = tem_indice(vz_set_tot, ii, jj, k)
 
         [painel_fachada_singular(
-            ptss[i + i00][j + j00], ptss[i + i01][j + j01], h, e, p0, phi0)
+            ptss[i + i00][j + j00], ptss[i + i01][j + j01], h, e, p0, phi0, janelas_set)
 
         for i in i1:i2, #i define a coluna inicial e final
             j in j1:j2 #j define a linha inicial e final
@@ -1017,13 +1018,13 @@ painel_fachada_for(ptss, h, vz_set_tot, k, p0, phi0, i00, j00, i01, j01, i1, i2,
     end
 
 #Cria os paineis de fachada interiores em um piso
-painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_fachada, k, p0, phi0) =
+painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, jan_set_l, jan_set_c, e_fachada, k, p0, phi0) =
 
     #cria a linha superior das fachadas interiores
     [painel_fachada_interior_for(
         pts_grelha(
             p + vy(dl - e_fachada/2), c, nc, l, nl),
-        h, vz_set, vz_set_tot, k, p0, phi0,
+        h, vz_set, vz_set_tot, jan_set_l, k, p0, phi0,
         0, 0, #posição (x,y) do p1 relativamente ao p
         1, 0, #posição (x,y) do p2 relativamente ao p
         1, nc,
@@ -1035,7 +1036,7 @@ painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_f
      painel_fachada_interior_for(
         pts_grelha(
             p + vy(e_fachada/2), c, nc, l, nl), 
-        h, vz_set, vz_set_tot, k, p0, phi0,
+        h, vz_set, vz_set_tot, jan_set_l, k, p0, phi0,
         1, 0, #posição (x,y) do p1 relativamente ao p
         0, 0, #posição (x,y) do p2 relativamente ao p
         1, nc,
@@ -1047,7 +1048,7 @@ painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_f
      painel_fachada_interior_for(
         pts_grelha(
             p + vx(e_fachada/2), c, nc, l, nl), 
-        h, vz_set, vz_set_tot, k, p0, phi0,
+        h, vz_set, vz_set_tot, jan_set_c, k, p0, phi0,
         0, 0, #posição (x,y) do p1 relativamente ao p
         0, 1, #posição (x,y) do p2 relativamente ao p
         2, nc,
@@ -1059,7 +1060,7 @@ painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_f
      painel_fachada_interior_for(
         pts_grelha(
             p + vx(dc - e_fachada/2), c, nc, l, nl), 
-        h, vz_set, vz_set_tot, k, p0, phi0,
+        h, vz_set, vz_set_tot, jan_set_c, k, p0, phi0,
         0, 1, #posição (x,y) do p1 relativamente ao p
         0, 0, #posição (x,y) do p2 relativamente ao p
         1, nc - 1,
@@ -1068,7 +1069,7 @@ painel_fachada_interior_piso(p, c, nc, l, nl, dc, dl, h, vz_set, vz_set_tot, e_f
         e_fachada, e_fachada)]
 
 #Função que seleciona os pontos para criar paineis de fachada interiores
-painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, p0, phi0, i00, j00, i01, j01, i1, i2, j1, j2, c1, c2, e, offset) =
+painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, janelas_set, k, p0, phi0, i00, j00, i01, j01, i1, i2, j1, j2, c1, c2, e, offset) =
     let
         in_vz(ii, jj)       = tem_indice(vz_set, ii, jj, k)
         in_vz_tot(ii, jj)   = tem_indice(vz_set_tot, ii, jj, k)
@@ -1083,7 +1084,7 @@ painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, p0, phi0, i00, j00, 
                 j == length(ptss[1]) - 1 ? 0 :  #offset para evitar sobreposição de paineis nos cantos
                 !in_vz(i, j + 1) ? offset : 
                 0),
-            h, e, p0, phi0)
+            h, e, p0, phi0, janelas_set)
 
         for i in i1:i2,                     #i define a coluna inicial e final
             j in j1:j2                      #j define a linha inicial e final
@@ -1093,7 +1094,7 @@ painel_fachada_interior_for(ptss, h, vz_set, vz_set_tot, k, p0, phi0, i00, j00, 
     end
 
 #Função que cria um painel de fachada
-painel_fachada_singular(p1, p2, h, e, p0, phi0) =
+painel_fachada_singular(p1, p2, h, e, p0, phi0, janelas_set) =
     let
         p11 = p_rotate(p0, p1, phi0)
         p22 = p_rotate(p0, p2, phi0)
@@ -1101,15 +1102,24 @@ painel_fachada_singular(p1, p2, h, e, p0, phi0) =
         painel_fachada_familia = wall_family_element(
             default_wall_family(), thickness = e)
 
-        janela_familia = window_family_element(
-            default_window_family(), 
-                width       = distance(p1, p2) /4, 
-                height      = h/2, 
-                thickness   = 0.05)
+        painel_fachada = wall(polygonal_path(p11, p22), level(0), level(h), painel_fachada_familia)
 
-        add_window(
-            wall(polygonal_path(p11, p22), level(0), level(h), painel_fachada_familia),
-            xy(distance(p1, p2)/4, h/4), janela_familia)
+        if janelas_set[1] == [] 
+            nothing
+        else
+            for i in 1:length(janelas_set)
+
+                janela_familia = window_family_element(
+                    default_window_family(), 
+                        width       = janelas_set[i][3], 
+                        height      = janelas_set[i][4], 
+                        thickness   = 0.05)
+
+                add_window(
+                    painel_fachada,
+                    xy(janelas_set[i][1], janelas_set[i][2]), janela_familia)
+            end
+        end
     end
 
 
@@ -1117,9 +1127,13 @@ painel_fachada_singular(p1, p2, h, e, p0, phi0) =
 delete_all_shapes()
 
 edificio_CREE(
-    xyz(0, 0, 0), 4, 7, 6.0, 3.0, 3, 3.0, xyz(0, 0, 0), pi/4,
+    xyz(0, 0, 0), 4, 7, 6.0, 3.0, 3, 3.0, xyz(3, 0, 0), pi/4,
     [
-        [1, 1, []]
+        [1, 0.5, 1, 2] #janelas das linhas, [offset horizontal, cota parapeito, h da janela, l da janela]
+    ],[
+        [1, 0.5, 1, 2], [4, 0.5, 1, 2] #janelas da colunas
+    ],[
+        [1, 1, []] #indices de vazios, [i, j, [pisos]]
     ],[
         [2, 3, [(1:4)...]], [3, 1, [()...]], [4, 1, [(1:5)...]], [6, 1, [(1:2)...]], [5, 4, [()...]], 
         [7, 2, [1]], [7, 4, [(1:4)...]], [2, 4, [()...]], [3, 2, [()...]], [4, 2, [()...]]
@@ -1128,15 +1142,23 @@ edificio_CREE(
 edificio_CREE(
     xyz(0, 50, 0), 2, 20, 6.0, 3.0, 3, 3.0, xyz(0, 0, 0), 0,
     [
+        [1, 0.5, 1, 2]
+    ],[
+        [1, 0.5, 1, 2], [4, 0.5, 1, 2]
+    ],[
         [1, 1, [2, 3]], [5, 1, []], [6, 1, []], [8, 1, []], [12, 2, []], [13, 2, []], [15, 1, []], 
         [17, 2, []], [20, 2, []], [10, 1, [3]], [11, 1, [3]], [12, 1,[2, 3]], [19, 1,[3]], [20, 1,[2, 3]]
     ],[
         [5, 2, [()...]], [6, 2, [()...]], [15, 2, [()...]], [16, 2, [()...]]
     ])
 
-6edificio_CREE(
+edificio_CREE(
     xyz(32, 0, 0), 6, 8, 6.0, 3.0, 2, 3.0, xyz(0, 0, 0), 0,
     [
+        [1, 0.5, 1, 2]
+    ],[
+        [1, 0.5, 1, 2], [4, 0.5, 1, 2]
+    ],[
         [3, 3, []], [3, 4, []], [4, 3, []], [4, 4, []], [5, 3, []], [5, 4, []], [6, 3, []], [6, 4, []],
         [3, 2,[2]], [4, 2,[2]], [5, 2,[2]], [6, 2,[2]], [3, 5,[2]], [4, 5,[2]], [5, 5,[2]], [6, 5,[2]]
     ], [
@@ -1146,6 +1168,10 @@ edificio_CREE(
 edificio_CREE(
     xyz(65, 0, 0), 3, 5, 6.0, 3.0, 10, 3.0, xyz(0, 0, 0), 0,
     [
+        [1, 0.5, 1, 2]
+    ],[
+        [1, 0.5, 1, 2], [4, 0.5, 1, 2]
+    ],[
         [1, 1.,[]], [1, 3, []], [5, 1, []], [5, 3, []], [2, 1,[(5:10)...]], [4, 1,[(5:10)...]],
         [2, 3,[(5:10)...]], [4, 3,[(5:10)...]], [1, 2,[(8:10)...]], [5, 2,[(8:10)...]]
     ],[
@@ -1176,4 +1202,3 @@ itera_quads(ptss) =
 malha = map_division((i,j) -> xy(i + sin(i*j),j), 0, 90, 10, 0, 60, 12)
 malha_quads = vcat(itera_quads(malha)...)
 polygon.(malha_quads)
- 
