@@ -1,0 +1,68 @@
+# ─── Julia ──────────────────────────────────────────────────────────────
+# Manifest.toml is deliberately NOT ignored: it pins exact package versions,
+# which is what makes the thesis prototype reproducible by someone else.
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+/docs/build/
+/docs/site/
+
+# ─── Pluto ──────────────────────────────────────────────────────────────
+.pluto_cache/
+
+# ─── AutoCAD / Revit scratch output ─────────────────────────────────────
+*.bak
+*.dwl
+*.dwl2
+*.sv$
+*.ac$
+*.err
+*.rvt.*.bak
+
+# ─── Unity (for when the KhepriUnity side lands here) ───────────────────
+/unity/[Ll]ibrary/
+/unity/[Tt]emp/
+/unity/[Oo]bj/
+/unity/[Bb]uild/
+/unity/[Bb]uilds/
+/unity/[Ll]ogs/
+/unity/[Uu]ser[Ss]ettings/
+/unity/[Mm]emoryCaptures/
+/unity/[Rr]ecordings/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.booproj
+*.pidb
+*.svd
+*.pdb
+*.mdb
+*.apk
+*.aab
+*.unitypackage
+
+# ─── Generated / exported models ────────────────────────────────────────
+# Geometry is regenerated from the model; don't version the output.
+/exports/
+*.dwg
+*.dxf
+*.ifc
+*.fbx
+*.glb
+*.gltf
+
+# ─── Windows / OneDrive / Office noise ──────────────────────────────────
+desktop.ini
+Thumbs.db
+ehthumbs.db
+$RECYCLE.BIN/
+~$*
+.DS_Store
+
+# ─── Editors ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*~
