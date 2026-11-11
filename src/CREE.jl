@@ -25,7 +25,8 @@ module CREE
 
 using Khepri
 
-export EdificioParams, DimensoesSistema, DIMENSOES_PADRAO, generate_model
+export EdificioParams, DimensoesSistema, DIMENSOES_PADRAO, markdown_dimensoes,
+       generate_model
 
 # ─────────────────────────────────────────────────────────────────────────
 # Input parameters
@@ -82,26 +83,73 @@ end
 #
 #     DimensoesSistema(hvb = 0.45, e_fachada = 0.12)
 #
+# What each symbol means is recorded once, in DESCRICOES_DIMENSOES below.
 Base.@kwdef struct DimensoesSistema
-    e_laje::Float64     = 0.1   # espessura da laje
-    apf::Float64        = 0.2   # largura dos pilares da fachada
-    bpf::Float64        = 0.3   # profundidade dos pilares da fachada
-    cpc::Float64        = 0.3   # largura e profundidade do pilar de canto
-    hvb::Float64        = 0.4   # altura da viga de bordadura
-    bvb::Float64        = 0.3   # largura da viga de bordadura
-    hvi::Float64        = 0.3   # altura da viga interior
-    bvi::Float64        = 0.3   # largura da viga interior
-    api::Float64        = 0.3   # largura e profundidade dos pilares interiores
-    enb::Float64        = 0.3   # espessura do núcleo de betão
-    hvL::Float64        = 0.3   # altura das vigas da laje
-    bvL::Float64        = 0.2   # largura das vigas da laje
-    e_fachada::Float64  = 0.1   # espessura da fachada
-    fonte::String       = "valores herdados do modelo; por confirmar com a documentação CREE"
+    e_laje::Float64     = 0.1
+    apf::Float64        = 0.2
+    bpf::Float64        = 0.3
+    cpc::Float64        = 0.3
+    hvb::Float64        = 0.4
+    bvb::Float64        = 0.3
+    hvi::Float64        = 0.3
+    bvi::Float64        = 0.3
+    api::Float64        = 0.3
+    enb::Float64        = 0.3
+    hvL::Float64        = 0.3
+    bvL::Float64        = 0.2
+    e_fachada::Float64  = 0.1
+    fonte::String       = "valores herdados do modelo; por confirmar com a CREE"
 end
 
 # The dimensions every call uses unless told otherwise. Identical to the
 # literals that were previously inlined in `edificio_CREE`.
 const DIMENSOES_PADRAO = DimensoesSistema()
+
+# The name of every dimension in full, grouped by component and in the order it
+# should be presented. This is the only place the symbols are explained, so a
+# symbol and its description cannot drift apart; anything that displays the
+# dimensions reads this rather than restating them.
+const DESCRICOES_DIMENSOES = [
+    ("Lajes", [
+        (:e_laje,    "Espessura da laje"),
+        (:hvL,       "Altura das vigas da laje"),
+        (:bvL,       "Largura das vigas da laje"),
+    ]),
+    ("Pilares", [
+        (:apf,       "Largura dos pilares da fachada"),
+        (:bpf,       "Profundidade dos pilares da fachada"),
+        (:cpc,       "Largura e profundidade do pilar de canto"),
+        (:api,       "Largura e profundidade dos pilares interiores"),
+    ]),
+    ("Vigas", [
+        (:hvb,       "Altura da viga de bordadura"),
+        (:bvb,       "Largura da viga de bordadura"),
+        (:hvi,       "Altura da viga interior"),
+        (:bvi,       "Largura da viga interior"),
+    ]),
+    ("Núcleo", [
+        (:enb,       "Espessura do núcleo de betão"),
+    ]),
+    ("Fachada", [
+        (:e_fachada, "Espessura da fachada"),
+    ]),
+]
+
+# A markdown table of the dimensions, by full name. Returns a String rather than
+# a rendered object, so that the model stays free of display dependencies and
+# the caller decides how to show it (in Pluto: `Markdown.parse(...)`).
+function markdown_dimensoes(dims::DimensoesSistema = DIMENSOES_PADRAO)
+    io = IOBuffer()
+    println(io, "| componente | símbolo | m |")
+    println(io, "|:---|:---|---:|")
+    for (grupo, campos) in DESCRICOES_DIMENSOES
+        println(io, "| **$(grupo)** | | |")
+        for (campo, descricao) in campos
+            println(io, "| $(descricao) | `$(campo)` | $(getfield(dims, campo)) |")
+        end
+    end
+    String(take!(io))
+end
 
 # ───────────────────────────────────────────────────────────────────────
 # ## Funções auxiliares

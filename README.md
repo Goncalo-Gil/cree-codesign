@@ -43,6 +43,10 @@ before, and a variant is one call away:
 Modelo.generate_model(parametros, Modelo.DimensoesSistema(hvb = 0.45, e_fachada = 0.12))
 ```
 
+What each symbol means is recorded once, in `DESCRICOES_DIMENSOES`.
+`markdown_dimensoes(dims)` renders the table by full name, which is what the notebook
+displays.
+
 The default values are the ones the model has generated with since `v1.0.0`. They have
 **not** been checked against CREE's own component documentation — the struct carries a
 `fonte` field to record, per value, where each one came from once that check is done. The

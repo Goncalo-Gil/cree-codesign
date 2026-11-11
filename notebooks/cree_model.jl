@@ -50,11 +50,7 @@ Para estudar uma variante, substituir `Modelo.DIMENSOES_PADRAO` por, por exemplo
 dimensoes = Modelo.DIMENSOES_PADRAO
 
 # ╔═╡ a1b2c3d4-0005-4000-8000-000000000005
-let
-    campos = [c for c in fieldnames(Modelo.DimensoesSistema) if c != :fonte]
-    linhas = join(["| `$(c)` | $(getfield(dimensoes, c)) |" for c in campos], "\n")
-    Markdown.parse("| dimensão | m |\n|:--|--:|\n" * linhas)
-end
+Markdown.parse(Modelo.markdown_dimensoes(dimensoes))
 
 # ╔═╡ 4c141db1-e614-4ab7-b659-8a6163d716df
 
