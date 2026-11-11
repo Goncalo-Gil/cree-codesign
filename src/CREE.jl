@@ -25,10 +25,18 @@ module CREE
 
 using Khepri
 
-export EdificioParams, generate_model
+export EdificioParams, DimensoesSistema, DIMENSOES_PADRAO, generate_model
 
 # ─────────────────────────────────────────────────────────────────────────
 # Input parameters
+#
+# Two kinds of input, deliberately kept apart:
+#
+#   EdificioParams     the design parameters — what varies from one
+#                      configuration to the next, and what the architect
+#                      manipulates during a session.
+#   DimensoesSistema   the dimensions of the system itself — fixed context,
+#                      the same for every configuration the system admits.
 # ─────────────────────────────────────────────────────────────────────────
 
 struct EdificioParams
@@ -54,6 +62,46 @@ struct EdificioParams
     Janelas_linha
     Janelas_coluna
 end
+
+# The cross-sections and thicknesses of the CREE components, in metres.
+#
+# These are not design parameters: no configuration reachable by moving a
+# slider changes them. They are the fixed context of the system, and they are
+# collected here — rather than left as literals inside `edificio_CREE` — so
+# that the thesis can state in one place which constraints were encoded as
+# rules and which were treated as given.
+#
+# The values are the ones the model has been generating with since v1.0.0.
+# They have NOT been checked against CREE's own component documentation; the
+# `fonte` field is there to record, per value, where it came from once that
+# check is done. The admissible range of each one is likewise still open —
+# both belong in §4.1 and §4.2.
+#
+# Overriding them is a keyword call, and nothing else in the model needs to
+# know:
+#
+#     DimensoesSistema(hvb = 0.45, e_fachada = 0.12)
+#
+Base.@kwdef struct DimensoesSistema
+    e_laje::Float64     = 0.1   # espessura da laje
+    apf::Float64        = 0.2   # largura dos pilares da fachada
+    bpf::Float64        = 0.3   # profundidade dos pilares da fachada
+    cpc::Float64        = 0.3   # largura e profundidade do pilar de canto
+    hvb::Float64        = 0.4   # altura da viga de bordadura
+    bvb::Float64        = 0.3   # largura da viga de bordadura
+    hvi::Float64        = 0.3   # altura da viga interior
+    bvi::Float64        = 0.3   # largura da viga interior
+    api::Float64        = 0.3   # largura e profundidade dos pilares interiores
+    enb::Float64        = 0.3   # espessura do núcleo de betão
+    hvL::Float64        = 0.3   # altura das vigas da laje
+    bvL::Float64        = 0.2   # largura das vigas da laje
+    e_fachada::Float64  = 0.1   # espessura da fachada
+    fonte::String       = "valores herdados do modelo; por confirmar com a documentação CREE"
+end
+
+# The dimensions every call uses unless told otherwise. Identical to the
+# literals that were previously inlined in `edificio_CREE`.
+const DIMENSOES_PADRAO = DimensoesSistema()
 
 # ───────────────────────────────────────────────────────────────────────
 # ## Funções auxiliares
@@ -1199,21 +1247,22 @@ end
 # Top level: assemble the building, and the entry point
 # ───────────────────────────────────────────────────────────────────────
 
-edificio_CREE(p, nl, nc, dl, dc, np, h, p0, phi0, janelas_set_l, janelas_set_c, vazios_set, nucleos_set) =
-    let 
-        e_laje = 0.1
-        apf = 0.2 # largura dos pilares da fachada
-        bpf = 0.3 # profundidade dos pilares da fachada
-        cpc = 0.3 # largura e profundidade do pilar de canto
-        hvb = 0.4 # Altura da viga de bordadura
-        bvb = 0.3 # Largura da viga de bordadura
-        hvi = 0.3 # Altura da viga interior
-        bvi = 0.3 # Largura da viga interior
-        api = 0.3 # largura e profundidade dos pilares interiores
-        enb = 0.3 # Espessura do nucleo de betão\
-        hvL = 0.3 # Altura das vigas da laje
-        bvL = 0.2 # Largura das vigas da laje
-        e_fachada = 0.1 # Espessura da fachada
+edificio_CREE(p, nl, nc, dl, dc, np, h, p0, phi0, janelas_set_l, janelas_set_c, vazios_set, nucleos_set,
+              dims::DimensoesSistema = DIMENSOES_PADRAO) =
+    let
+        e_laje    = dims.e_laje
+        apf       = dims.apf
+        bpf       = dims.bpf
+        cpc       = dims.cpc
+        hvb       = dims.hvb
+        bvb       = dims.bvb
+        hvi       = dims.hvi
+        bvi       = dims.bvi
+        api       = dims.api
+        enb       = dims.enb
+        hvL       = dims.hvL
+        bvL       = dims.bvL
+        e_fachada = dims.e_fachada
 
         vz_set = completa_vazios(vazios_set, np)
         ncl_set = completa_vazios(nucleos_set, np)
@@ -1235,7 +1284,7 @@ edificio_CREE(p, nl, nc, dl, dc, np, h, p0, phi0, janelas_set_l, janelas_set_c, 
             p, dc, nc, dl, nl, np, h, vz_set, vz_set_tot, janelas_set_l, janelas_set_c, e_fachada, p0, phi0)
     end
 
-generate_model(params::EdificioParams) =
+generate_model(params::EdificioParams, dims::DimensoesSistema = DIMENSOES_PADRAO) =
     begin
         delete_all_shapes()
 
@@ -1255,7 +1304,9 @@ generate_model(params::EdificioParams) =
             params.Janelas_linha,
             params.Janelas_coluna,
             params.Vazios,
-            params.Núcleos
+            params.Núcleos,
+
+            dims
         )
     end
 

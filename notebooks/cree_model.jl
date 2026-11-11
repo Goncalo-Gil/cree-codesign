@@ -38,6 +38,24 @@ md"""## Modelo
 As regras do sistema CREE estão em `src/CREE.jl`; este caderno é apenas a interface. A célula seguinte carrega o módulo e liga-o ao nome `Modelo`.
 """
 
+# ╔═╡ a1b2c3d4-0003-4000-8000-000000000003
+md"""## Dimensões do sistema
+
+Secções e espessuras dos componentes CREE, em metros. Não são parâmetros de projeto: nenhuma configuração alcançável pelos cursores abaixo as altera. São o contexto fixo do sistema.
+
+Para estudar uma variante, substituir `Modelo.DIMENSOES_PADRAO` por, por exemplo, `Modelo.DimensoesSistema(hvb = 0.45, e_fachada = 0.12)`.
+"""
+
+# ╔═╡ a1b2c3d4-0004-4000-8000-000000000004
+dimensoes = Modelo.DIMENSOES_PADRAO
+
+# ╔═╡ a1b2c3d4-0005-4000-8000-000000000005
+let
+    campos = [c for c in fieldnames(Modelo.DimensoesSistema) if c != :fonte]
+    linhas = join(["| `$(c)` | $(getfield(dimensoes, c)) |" for c in campos], "\n")
+    Markdown.parse("| dimensão | m |\n|:--|--:|\n" * linhas)
+end
+
 # ╔═╡ 4c141db1-e614-4ab7-b659-8a6163d716df
 
 md"## Parãmetros"
@@ -439,7 +457,7 @@ begin
     using Khepri
         backend(autocad)
 
-    gerar_modelo == true ? Modelo.generate_model(parametros) : 
+    gerar_modelo == true ? Modelo.generate_model(parametros, dimensoes) : 
     nothing
     print("Geração do edifício concluida")
 end
@@ -853,6 +871,9 @@ version = "1.64.0+1"
 # ╠═e162d689-8acf-417c-ac6e-5ab90933adef
 # ╟─a1b2c3d4-0002-4000-8000-000000000002
 # ╠═a1b2c3d4-0001-4000-8000-000000000001
+# ╟─a1b2c3d4-0003-4000-8000-000000000003
+# ╠═a1b2c3d4-0004-4000-8000-000000000004
+# ╟─a1b2c3d4-0005-4000-8000-000000000005
 # ╟─4c141db1-e614-4ab7-b659-8a6163d716df
 # ╟─359f6b87-837c-43aa-bdd9-05bb7fc95f7f
 # ╟─5f88a907-59d9-4df0-a238-f22c590a337f
