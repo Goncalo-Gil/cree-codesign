@@ -76,6 +76,26 @@ top-level expression in the file. Keep it last: binding the result to a name is 
 Pluto treat the model as an ordinary dependency and run the loader cell before the cells
 that use it.
 
+## Testing
+
+```bash
+julia test/runtests.jl
+```
+
+Automated tests: the dimensions, the helper functions, and `generate_model` end to end.
+They run with no Khepri backend active, so they need neither Pluto nor AutoCAD and leave
+any open drawing alone.
+
+```bash
+julia test/visual_autocad.jl
+```
+
+A visual check: draws eight labelled configurations side by side in AutoCAD (base, voids,
+cores, windows, rotation, a combined case, alternative dimensions, the 1×1 minimum) for
+inspection by eye. It **clears the current drawing**, so open an empty one first. Pass case
+numbers to draw only some (`julia test/visual_autocad.jl 3 5`), or `--dry-run` to build
+them all without drawing.
+
 ## History
 
 Development before this repository existed was versioned by hand, as numbered copies in a
